@@ -164,6 +164,14 @@ for col in post_metrics:
 
 user_master['first_success_month'] = user_master['first_success_date'].dt.to_period('M').astype(str)
 
+
+merchant_candidates = ['first_report_sub_cat', 'report_sub_cat', 'first_appID', 'appID', 'first_merchant', 'merchant_name']
+merchant_col = None
+for col in merchant_candidates:
+    if col in user_master.columns:
+        merchant_col = col
+        break
+
 # Sidebar Filters
 st.sidebar.markdown(f'<h4 style="font-weight: 800; font-size: 16px; letter-spacing: 1px; color: {colors["primary"]}; margin-bottom: 20px;">FILTERS</h4>', unsafe_allow_html=True)
 
@@ -191,6 +199,8 @@ def filter_dropdown(df, col_name, display_name):
     return df
 
 df_filt = filter_dropdown(df_filt, 'first_report_cat', 'Report Category')
+if merchant_col:
+    df_filt = filter_dropdown(df_filt, merchant_col, 'Merchant / Sub-category')
 df_filt = filter_dropdown(df_filt, 'first_promotion_type_clean', 'Promotion Type')
 df_filt = filter_dropdown(df_filt, 'gender', 'Gender')
 df_filt = filter_dropdown(df_filt, 'first_platform', 'Platform')
@@ -295,6 +305,7 @@ with tab1:
                 fig_trend = px.area(monthly, x='first_success_month', y='NPU_Count', markers=True, color_discrete_sequence=["#3498DB"])
                 fig_trend.update_layout(xaxis_title=None, yaxis_title="NPU Count", height=400, margin=dict(l=60, r=20, t=20, b=40))
                 st.plotly_chart(fig_trend, use_container_width=True)
+                st.caption("Tracks monthly NPU acquisition volume and helps detect spikes or drops over time.")
                 
     with r1c2:
         with st.container(border=True):
@@ -306,6 +317,7 @@ with tab1:
                 fig_gmv_disc.add_trace(go.Scatter(x=monthly_fin['first_success_month'], y=monthly_fin['Disc'], name='First Discount', marker_color="#E74C3C", yaxis='y2', mode='lines+markers'))
                 fig_gmv_disc.update_layout(height=400, margin=dict(l=60, r=60, t=20, b=40), yaxis=dict(tickformat=".2s"), yaxis2=dict(overlaying='y', side='right', showgrid=False, tickformat=".2s"), barmode='group')
                 st.plotly_chart(fig_gmv_disc, use_container_width=True)
+                st.caption("Compares first transaction value with campaign subsidy to monitor subsidy efficiency.")
                 
     r2c1, r2c2 = st.columns([5, 7])
     with r2c1:
@@ -322,12 +334,25 @@ with tab1:
                 fig_uc = px.bar(top_uc.sort_values('NPU', ascending=True), x='NPU', y='first_report_cat', orientation='h', color_discrete_sequence=["#9B59B6"])
                 fig_uc.update_layout(xaxis_title="NPU Count", yaxis_title=None, height=350, margin=dict(l=10, r=10, t=10, b=40))
                 st.plotly_chart(fig_uc, use_container_width=True)
+                st.caption("Shows which first-use cases contribute the largest share of acquired NPUs.")
                 
                 top1_uc = top_uc.iloc[0]['first_report_cat'] if not top_uc.empty else "N/A"
                 top2_uc = top_uc.iloc[1]['first_report_cat'] if len(top_uc) > 1 else "N/A"
     
     with r2c2:
-        st.markdown("<br><br>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown("###### 🏪 Top 10 Merchant/Sub-categories by NPU")
+            if merchant_col:
+                merch_df = df_filt.groupby(merchant_col)['userID'].nunique().reset_index(name='NPU')
+                merch_df = merch_df.sort_values('NPU', ascending=False).head(10)
+                fig_merch = px.bar(merch_df.sort_values('NPU', ascending=True), x='NPU', y=merchant_col, orientation='h', color_discrete_sequence=["#1ABC9C"])
+                fig_merch.update_layout(xaxis_title="NPU Count", yaxis_title=None, height=350, margin=dict(l=10, r=10, t=10, b=40))
+                st.plotly_chart(fig_merch, use_container_width=True)
+                st.caption("This chart identifies which merchants or sub-categories contribute the most to NPU acquisition volume.")
+            else:
+                st.info("Merchant/Sub-category data is not available in current output files.")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
         try:
             make_insight([
                 f"[What happened?] {top1_uc} and {top2_uc} are the dominant first-use cases, contributing the majority of acquired NPUs.",
@@ -350,6 +375,7 @@ with tab2:
             fig_scatter.update_layout(xaxis_title="NPU Count (log scale)", yaxis_title="Average First Transaction Amount", coloraxis_colorbar_title="Subsidy Rate", height=500, margin=dict(l=60, r=40, t=20, b=60))
             fig_scatter.update_xaxes(type="log")
             st.plotly_chart(fig_scatter, use_container_width=True)
+            st.caption("Compares campaigns by acquisition volume, first transaction value, and subsidy intensity.")
             
         r3c1, r3c2, r3c3 = st.columns(3)
         with r3c1:
@@ -358,18 +384,21 @@ with tab2:
                 fig_bar_npu = px.bar(df_camp.nlargest(10, 'NPU_Count').sort_values('NPU_Count'), x='NPU_Count', y='Campaign_Label', orientation='h', color_discrete_sequence=["#3498DB"])
                 fig_bar_npu.update_layout(yaxis_title=None, xaxis_title="NPU Count", height=400, margin=dict(l=10, r=10, t=10, b=40))
                 st.plotly_chart(fig_bar_npu, use_container_width=True)
+                st.caption("Identifies the largest acquisition drivers.")
         with r3c2:
             with st.container(border=True):
                 st.markdown("###### 💰 Top 10 Campaigns by First GMV")
                 fig_bar_gmv = px.bar(df_camp.nlargest(10, 'First_GMV').sort_values('First_GMV'), x='First_GMV', y='Campaign_Label', orientation='h', color_discrete_sequence=["#2ECC71"])
                 fig_bar_gmv.update_layout(yaxis_title=None, xaxis_title="First GMV", height=400, margin=dict(l=10, r=10, t=10, b=40))
                 st.plotly_chart(fig_bar_gmv, use_container_width=True)
+                st.caption("Identifies campaigns generating the highest first transaction value.")
         with r3c3:
             with st.container(border=True):
                 st.markdown("###### 🔥 Top 10 by Subsidy Rate")
                 fig_bar_sub = px.bar(df_camp.nlargest(10, 'First_Subsidy_Rate').sort_values('First_Subsidy_Rate'), x='First_Subsidy_Rate', y='Campaign_Label', orientation='h', color_discrete_sequence=["#E74C3C"])
                 fig_bar_sub.update_layout(yaxis_title=None, xaxis_title="Subsidy Rate", xaxis=dict(tickformat=".0%"), height=400, margin=dict(l=10, r=10, t=10, b=40))
                 st.plotly_chart(fig_bar_sub, use_container_width=True)
+                st.caption("Highlights campaigns with high subsidy intensity after applying the NPU threshold.")
                 
         st.markdown("###### 📋 Campaign Acquisition Ranking Table")
         df_table = df_camp.sort_values('NPU_Count', ascending=False).head(50)
@@ -418,12 +447,14 @@ with tab3:
                 fig_ret = px.scatter(df_ret, x="NPU_Count", y="D30_Retention", size="Avg_Post_GMV", color="Post_Non_Promo_Tx_Share", hover_name="Campaign_Label", color_continuous_scale="Plasma", size_max=40)
                 fig_ret.update_layout(height=450, margin=dict(l=60, r=40, t=20, b=40), xaxis_title="NPU Count", yaxis_title="Repeat within 30 Days", yaxis=dict(tickformat=".0%"))
                 st.plotly_chart(fig_ret, use_container_width=True)
+                st.caption("Evaluates whether high-volume campaigns also generate repeat behavior within 30 days.")
         with r4c2:
             with st.container(border=True):
                 st.markdown("###### 🏆 Top 10 by D30 Repeat")
                 fig_d30_bar = px.bar(df_ret.nlargest(10, 'D30_Retention').sort_values('D30_Retention'), x='D30_Retention', y='Campaign_Label', orientation='h', color_discrete_sequence=["#F1C40F"])
                 fig_d30_bar.update_layout(height=450, margin=dict(l=10, r=10, t=10, b=40), xaxis_title="Repeat within 30 Days", yaxis_title=None, xaxis=dict(tickformat=".0%"))
                 st.plotly_chart(fig_d30_bar, use_container_width=True)
+                st.caption("Ranks campaigns by post-acquisition repeat quality.")
                 
         st.markdown("###### 📈 Quality Signals Table")
         ret_cols = ['Campaign_Label', 'NPU_Count', 'D7_Retention', 'D30_Retention', 'D60_Retention', 'Avg_Post_Tx', 'Avg_Post_GMV', 'Post_Non_Promo_Tx_Share']
@@ -456,6 +487,7 @@ with tab4:
                 fig_uc_scatter = px.scatter(uc_summary, x="NPU_Count", y="Avg_Amount", size="GMV", hover_name="first_report_cat", color="first_report_cat_short", size_max=50, color_discrete_sequence=px.colors.qualitative.Pastel)
                 fig_uc_scatter.update_layout(height=600, legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5), xaxis_title="NPU Count", yaxis_title="Avg First Amount", margin=dict(l=60, r=40, t=20, b=100))
                 st.plotly_chart(fig_uc_scatter, use_container_width=True)
+                st.caption("Compares first-use cases by NPU scale, average first transaction amount, and GMV.")
                 
         with r5c2:
             with st.container(border=True):
@@ -479,6 +511,7 @@ with tab4:
                         fig_transition = go.Figure(data=go.Heatmap(z=pivot_trans.values, x=pivot_trans.columns, y=pivot_trans.index, colorscale='Magma'))
                         fig_transition.update_layout(height=600, xaxis_title="Subsequent Post Category", yaxis_title="First Acquired Category", margin=dict(l=100, r=40, t=20, b=100), xaxis=dict(tickangle=-45, automargin=True), yaxis=dict(automargin=True))
                         st.plotly_chart(fig_transition, use_container_width=True)
+                        st.caption("Shows whether users acquired from one category expand to other categories after acquisition.")
                     else:
                         st.info("No transition data found.")
                 else:
@@ -489,5 +522,37 @@ with tab4:
             "[So what?] A bright diagonal means users stick to their first category. Bright spots off-diagonal show strong cross-category expansion.",
             "[Next step?] If users from 'Telco' often transition to 'Food', design campaigns that explicitly bundle Telco with Food vouchers."
         ])
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown("###### 🏪 Merchant/Sub-category Volume vs Value")
+            if merchant_col:
+                if 'first_amount' in df_filt.columns and 'first_discountAmount' in df_filt.columns:
+                    merch_scatter = df_filt.groupby(merchant_col).agg(
+                        NPU_Count=('userID', 'nunique'),
+                        First_GMV=('first_amount', 'sum'),
+                        First_Discount=('first_discountAmount', 'sum')
+                    ).reset_index()
+                    merch_scatter['Avg_First_Amount'] = merch_scatter.apply(lambda x: safe_divide(x['First_GMV'], x['NPU_Count']), axis=1)
+                    merch_scatter['First_Subsidy_Rate'] = merch_scatter.apply(lambda x: safe_divide(x['First_Discount'], x['First_GMV']), axis=1)
+                    
+                    fig_merch_scat = px.scatter(
+                        merch_scatter, x="NPU_Count", y="Avg_First_Amount", size="First_GMV", 
+                        color="First_Subsidy_Rate", hover_name=merchant_col,
+                        color_continuous_scale="Viridis", size_max=50
+                    )
+                    fig_merch_scat.update_layout(
+                        xaxis_title="NPU Count", 
+                        yaxis_title="Average First Transaction Amount", 
+                        coloraxis_colorbar_title="First Subsidy Rate", 
+                        height=500, margin=dict(l=60, r=40, t=20, b=60)
+                    )
+                    st.plotly_chart(fig_merch_scat, use_container_width=True)
+                    st.caption("This chart compares merchant/sub-category segments by acquisition scale, transaction value, and subsidy intensity.")
+                else:
+                    st.warning("First amount or discount data missing for this chart.")
+            else:
+                st.info("Merchant/Sub-category data is not available in current output files.")
+
     else:
         st.warning("Category data not available.")
