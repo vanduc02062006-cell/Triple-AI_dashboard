@@ -1,0 +1,14 @@
+# Ignore large CSVs to prevent GitHub 100MB limit errors
+outputs/df_success.csv
+outputs/df_master_clean.csv
+outputs/transaction_info.xlsx
+
+# Environment and cache
+__pycache__/
+.venv/
+venv/
+env/
+.env
+
+# Streamlit
+.streamlit/credentials.toml
